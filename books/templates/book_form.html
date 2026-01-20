@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-5">
+
+    <h4 id="page-title" class="mb-4 text-center text-primary">
+        <i class="bi bi-book-half"></i> Add Book
+    </h4>
+
+    <div class="card shadow-sm rounded p-4 mx-auto" style="max-width: 500px;">
+
+        <div class="mb-3">
+            <label for="title" class="form-label fw-bold">Book Title</label>
+            <input id="title" type="text" class="form-control form-control-lg" placeholder="Enter book title">
+        </div>
+
+        <div class="mb-3">
+            <label for="author" class="form-label fw-bold">Author</label>
+            <select id="author" class="form-select form-select-lg">
+                <option value="">Select Author</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="category" class="form-label fw-bold">Category</label>
+            <select id="category" class="form-select form-select-lg">
+                <option value="">Select Category</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="total" class="form-label fw-bold">Total Copies</label>
+            <input id="total" type="number" class="form-control form-control-lg" placeholder="Enter total copies">
+        </div>
+
+        <div class="mb-4">
+            <label for="available" class="form-label fw-bold">Available Copies</label>
+            <input id="available" type="number" class="form-control form-control-lg" placeholder="Enter available copies">
+        </div>
+
+        <button class="btn btn-success w-100 btn-lg fw-bold" onclick="saveBook()">
+            <i class="bi bi-save2-fill"></i> Save Book
+        </button>
+
+    </div>
+</div>
+
+<script>
+const token = localStorage.getItem("access");
+if (!token) window.location.href = "/";
+
+// DOM Elements
+const authorEl = document.getElementById("author");
+const categoryEl = document.getElementById("category");
+
+// Extract book ID from URL
+const pathParts = window.location.pathname.split("/").filter(Boolean);
+let bookId = pathParts[pathParts.length - 1] === "edit" 
+    ? pathParts[pathParts.length - 2] 
+    : null;
+
+if (bookId) document.getElementById("page-title").innerText = "Update Book";
+
+// Maps
+let authorsMap = {};
+
+// ---------------- LOAD AUTHORS ----------------
+function loadAuthors(url = "http://127.0.0.1:8000/api/authors/") {
+    return fetch(url, { headers: { Authorization: "Bearer " + token } })
+        .then(res => res.json())
+        .then(data => {
+            const items = data.results || data;
+            items.forEach(a => {
+                authorsMap[a.id] = a.name;
+                authorEl.innerHTML += `<option value="${a.id}">${a.name}</option>`;
+            });
+            if (data.next) return loadAuthors(data.next);
+        });
+}
+
+// ---------------- LOAD CATEGORIES ----------------
+function loadCategories(url = "http://127.0.0.1:8000/api/categories/") {
+    return fetch(url, { headers: { Authorization: "Bearer " + token } })
+        .then(res => res.json())
+        .then(data => {
+            const items = data.results || data;
+            items.forEach(c => categoryEl.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            if (data.next) return loadCategories(data.next);
+        });
+}
+
+// ---------------- LOAD BOOK FOR EDIT ----------------
+function loadBook() {
+    if (!bookId) return;
+
+    fetch(`http://127.0.0.1:8000/api/books/${bookId}/`, {
+        headers: { Authorization: "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(book => {
+        document.getElementById("title").value = book.title;
+        document.getElementById("total").value = book.total_copies;
+        document.getElementById("available").value = book.available_copies;
+
+        // Set author select value
+        if (book.author && typeof book.author === "object") {
+            authorEl.value = book.author.id;
+        } else {
+            authorEl.value = book.author;
+        }
+
+        // Set category select value
+        if (book.category && typeof book.category === "object") {
+            categoryEl.value = book.category.id;
+        } else {
+            categoryEl.value = book.category;
+        }
+    })
+    .catch(err => console.error(err));
+}
+
+// ---------------- INITIALIZE ----------------
+Promise.all([loadAuthors(), loadCategories()]).then(() => loadBook());
+
+// ---------------- SAVE BOOK ----------------
+async function saveBook() {
+    const title = document.getElementById("title").value.trim();
+    const authorId = Number(authorEl.value);
+    const categoryId = Number(categoryEl.value);
+    const total = Number(document.getElementById("total").value);
+    const available = Number(document.getElementById("available").value);
+
+    if (!title || !authorId || !categoryId) {
+        alert("All fields are required");
+        return;
+    }
+
+    const payload = {
+        title,
+        author: authorId,
+        category: categoryId,
+        total_copies: total,
+        available_copies: available
+    };
+
+    const apiUrl = bookId 
+        ? `http://127.0.0.1:8000/api/books/${bookId}/` 
+        : `http://127.0.0.1:8000/api/books/`;
+
+    fetch(apiUrl, {
+        method: bookId ? "PUT" : "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Failed to save book");
+        return res.json();
+    })
+    .then(() => {
+        alert("Book saved successfully");
+        window.location.href = "/books-list/";
+    })
+    .catch(() => alert("Error saving book"));
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-warning text-dark text-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-journal-bookmark-fill"></i> Issue Book
+                    </h4>
+                </div>
+                <div class="card-body">
+
+                    <!-- Select Book -->
+                    <label for="book_id" class="form-label">Select Book</label>
+                    <select id="book_id" class="form-select mb-3">
+                        <option value="">-- Choose a Book --</option>
+                    </select>
+
+                    <!-- Select User -->
+                    <label for="user_id" class="form-label">Select User</label>
+                    <select id="user_id" class="form-select mb-4">
+                        <option value="">-- Choose a User --</option>
+                    </select>
+
+                    <!-- Issue Button -->
+                    <button id="issue-btn" class="btn btn-warning w-100 fw-bold" onclick="issueBook()">
+                        <i class="bi bi-send-fill"></i> Issue Book
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const token = localStorage.getItem("access");
+if (!token) window.location.href = "/";
+
+const bookSelect = document.getElementById("book_id");
+const userSelect = document.getElementById("user_id");
+const issueBtn = document.getElementById("issue-btn");
+
+// ------------------- LOAD BOOKS -------------------
+function loadBooks() {
+    return fetch("http://127.0.0.1:8000/api/books/", {
+        headers: { Authorization: "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        bookSelect.innerHTML = '<option value="">-- Choose a Book --</option>';
+
+        const books = data.results || data; // pagination safe
+
+        books.forEach(book => {
+            const disabled = book.available_copies === 0 ? "disabled" : "";
+            const text = `${book.title} (${book.available_copies} available)`;
+
+            bookSelect.innerHTML += `
+                <option value="${book.id}" ${disabled}>
+                    ${text}
+                </option>
+            `;
+        });
+    })
+    .catch(err => console.error("Books load error:", err));
+}
+
+
+// ------------------- LOAD USERS -------------------
+function loadUsers() {
+    return fetch("http://127.0.0.1:8000/api/auth/users/", {
+        headers: { Authorization: "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        userSelect.innerHTML = '<option value="">-- Choose a User --</option>';
+
+        const users = data.results || data; // pagination safe
+
+        users.forEach(user => {
+            userSelect.innerHTML += `
+                <option value="${user.id}">
+                    ${user.username}
+                </option>
+            `;
+        });
+    })
+    .catch(err => console.error("Users load error:", err));
+}
+
+
+// ------------------- INIT -------------------
+Promise.all([loadBooks(), loadUsers()]);
+
+// ------------------- ISSUE BOOK -------------------
+function issueBook() {
+    if (!bookSelect.value || !userSelect.value) {
+        alert("Please select both a book and a user.");
+        return;
+    }
+
+    // Disable button to prevent double-click
+    issueBtn.disabled = true;
+
+    fetch("http://127.0.0.1:8000/api/issue-books/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({
+            book: Number(bookSelect.value),
+            user: Number(userSelect.value)
+        })
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Failed to issue book");
+        return res.json();
+    })
+    .then(() => {
+        alert("✅ Book issued successfully!");
+
+        // Reload books dropdown to update availability
+        loadBooks();
+        // Reset selection
+        bookSelect.value = "";
+        userSelect.value = "";
+        issueBtn.disabled = false;
+    })
+    .catch(err => {
+        console.error(err);
+        alert("❌ Error issuing book. Check console.");
+        issueBtn.disabled = false;
+    });
+}
+</script>
+
+{% endblock %}
